@@ -38,9 +38,9 @@ EXTRA_LETTER_PROB = 0.08    # per-chord probability of doubling a letter
 BOUNDARY_SHIFT_PROB = 0.25  # per-word probability of shifting a syllable boundary
 CLEAN_VARIANTS_PER_WORD = 3 # how many clean syllabification variants to keep
 OUTPUT_FILE = "data/chord_dataset.csv"
-MIN_WORD_LENGTH = 3
+MIN_WORD_LENGTH = 1
 MAX_WORD_LENGTH = 20
-TARGET_VOCAB_SIZE = 5000
+TARGET_VOCAB_SIZE = 20000
 
 # Keyboard adjacency map (QWERTY)
 KEYBOARD_ADJACENCY = {
@@ -178,6 +178,8 @@ def generate_variants(word: str) -> list[tuple[str, str]]:
         add(syllables_to_chords(sylls), word)
 
     # 3. Noisy versions of each clean variant
+    if(len(word) < 3):
+        return examples  # skip noise for very short words
     for sylls in syl_variants[:CLEAN_VARIANTS_PER_WORD]:
         for _ in range(2):  # 2 noisy draws per variant
             if random.random() < NOISE_RATE:
