@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chord Input</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f13;
+      font-family: 'Courier New', monospace;
+      color: #e0e0e0;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      color: #888;
+      margin-bottom: 2rem;
+      text-transform: uppercase;
+    }
+
+    .container {
+      width: 680px;
+      max-width: 95vw;
+    }
+
+    .output-area {
+      background: #16161e;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      padding: 1.5rem;
+      min-height: 120px;
+      font-size: 1.3rem;
+      letter-spacing: 0.05em;
+      color: #c9d1d9;
+      word-break: break-all;
+      line-height: 1.8;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .output-area::after {
+      content: '|';
+      display: inline-block;
+      color: #7c6af7;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .chord-token {
+      display: inline-block;
+      background: #1e1e2e;
+      border: 1px solid #3a3a5a;
+      border-radius: 5px;
+      padding: 1px 7px;
+      margin: 2px 1px;
+      color: #a78bfa;
+      font-size: 1.1rem;
+    }
+
+    .space-token {
+      display: inline-block;
+      width: 0.6em;
+    }
+
+    .capture-box {
+      background: #16161e;
+      border: 2px solid #7c6af7;
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      cursor: text;
+    }
+
+    .capture-box:focus-within {
+      border-color: #a78bfa;
+      box-shadow: 0 0 0 3px rgba(124, 106, 247, 0.2);
+    }
+
+    .capture-label {
+      font-size: 0.75rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      white-space: nowrap;
+    }
+
+    .active-keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex: 1;
+      min-height: 2rem;
+      align-items: center;
+    }
+
+    .key-pill {
+      background: #7c6af7;
+      color: white;
+      border-radius: 5px;
+      padding: 2px 10px;
+      font-size: 1rem;
+      font-weight: bold;
+      animation: pop 0.1s ease-out;
+    }
+
+    @keyframes pop {
+      from { transform: scale(0.7); opacity: 0.5; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    #hidden-input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      width: 1px;
+      height: 1px;
+    }
+
+    .hint {
+      margin-top: 1.2rem;
+      font-size: 0.78rem;
+      color: #444;
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-clear {
+      margin-top: 1rem;
+      background: none;
+      border: 1px solid #2a2a3a;
+      color: #555;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      display: block;
+      margin-left: auto;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-clear:hover {
+      border-color: #7c6af7;
+      color: #a78bfa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⌨ Chord Input</h1>
+    <p>Prompt: Discipline is often mistaken for rigidity, but in truth it is a form of freedom. The undisciplined mind drifts toward distraction, seduced by novelty and noise, while the disciplined mind chooses its direction with deliberation. To cultivate discipline is not to suppress desire, but to subordinate impulse to intention. It is the quiet architecture beneath achievement, the invisible scaffolding that supports mastery.
+
+In an era intoxicated by immediacy, patience has become a competitive advantage. The individual who can endure boredom, sustain focus, and tolerate incremental progress will outpace the one who seeks constant stimulation. Excellence, after all, is rarely explosive; it is cumulative. It accrues through small, repeated acts performed with consistency and care.
+
+The question, then, is not whether one is capable of greatness, but whether one is willing to engage in the quotidian rituals that make greatness possible. </p>
+
+    <div class="output-area" id="output"></div>
+
+    <div class="capture-box" id="capture-box" tabindex="0">
+      <span class="capture-label">Keys held</span>
+      <div class="active-keys" id="active-keys">
+        <span style="color:#333; font-size:0.85rem;">click here and type...</span>
+      </div>
+    </div>
+
+    <input id="hidden-input" type="text" autocomplete="off" spellcheck="false">
+
+    <button class="btn-clear" id="btn-clear">CLEAR</button>
+
+    <p class="hint">Press multiple keys simultaneously → release → chord appears &nbsp;|&nbsp; Space inserts a space &nbsp;|&nbsp; Backspace deletes previous word</p>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+    const activeKeysEl = document.getElementById('active-keys');
+    const captureBox = document.getElementById('capture-box');
+    const hiddenInput = document.getElementById('hidden-input');
+    const btnClear = document.getElementById('btn-clear');
+
+    let heldKeys = new Set();
+    let chordKeys = new Set(); // accumulates all keys pressed in this chord
+    let outputTokens = []; // array of {type:'chord'|'space', value?}
+    let chordPending = false;
+
+    function focusInput() {
+      hiddenInput.focus();
+    }
+
+    captureBox.addEventListener('click', focusInput);
+    captureBox.addEventListener('focus', focusInput);
+    document.addEventListener('click', e => {
+      if (captureBox.contains(e.target) || e.target === captureBox) focusInput();
+    });
+
+    window.addEventListener('load', focusInput);
+
+    hiddenInput.addEventListener('keydown', e => {
+      e.preventDefault();
+
+      const key = e.key.toLowerCase();
+
+      if (['control','shift','alt','meta','capslock','tab','escape'].includes(key)) return;
+
+      // Backspace: delete all chords belonging to the previous word
+      if (key === 'backspace') {
+        // If a chord is mid-flight, cancel it first
+        if (chordPending) {
+          chordKeys.clear();
+          chordPending = false;
+          heldKeys.clear();
+          renderActiveKeys();
+          return;
+        }
+        deleteLastWord();
+        return;
+      }
+
+      if (key === ' ') {
+        if (heldKeys.size > 0) {
+          commitChord();
+        }
+        outputTokens.push({ type: 'space' });
+        renderOutput();
+        return;
+      }
+
+      if (!heldKeys.has(key)) {
+        heldKeys.add(key);
+        chordKeys.add(key);
+        chordPending = true;
+      }
+
+      renderActiveKeys();
+    });
+
+    hiddenInput.addEventListener('keyup', e => {
+      const key = e.key.toLowerCase();
+      heldKeys.delete(key);
+      renderActiveKeys();
+
+      if (heldKeys.size === 0 && chordPending) {
+        commitChord();
+      }
+    });
+
+    window.addEventListener('blur', () => {
+      if (chordPending && chordKeys.size > 0) {
+        heldKeys.clear();
+        commitChord();
+      }
+      renderActiveKeys();
+    });
+
+    function commitChord() {
+      if (chordKeys.size === 0) return;
+      const sorted = Array.from(chordKeys).sort().join('');
+      outputTokens.push({ type: 'chord', value: sorted });
+      chordKeys.clear();
+      chordPending = false;
+      renderOutput();
+      renderActiveKeys();
+    }
+
+    // Delete all chords back to (and including) the last space token.
+    // If there's no space, deletes everything.
+    function deleteLastWord() {
+      if (outputTokens.length === 0) return;
+
+      // If the last token is a space, remove just that space
+      if (outputTokens[outputTokens.length - 1].type === 'space') {
+        outputTokens.pop();
+        renderOutput();
+        return;
+      }
+
+      // Walk backwards and remove all chords until we hit a space or the start
+      while (outputTokens.length > 0 && outputTokens[outputTokens.length - 1].type === 'chord') {
+        outputTokens.pop();
+      }
+
+      renderOutput();
+    }
+
+    function renderActiveKeys() {
+      activeKeysEl.innerHTML = '';
+      if (heldKeys.size === 0 && chordKeys.size === 0) {
+        activeKeysEl.innerHTML = '<span style="color:#333; font-size:0.85rem;">click here and type...</span>';
+        return;
+      }
+      const display = chordKeys.size > 0 ? chordKeys : heldKeys;
+      display.forEach(k => {
+        const pill = document.createElement('span');
+        pill.className = 'key-pill';
+        pill.textContent = k;
+        activeKeysEl.appendChild(pill);
+      });
+    }
+
+    function renderOutput() {
+      output.innerHTML = '';
+      for (let i = 0; i < outputTokens.length; i++) {
+        const tok = outputTokens[i];
+        if (tok.type === 'space') {
+          const sp = document.createElement('span');
+          sp.className = 'space-token';
+          output.appendChild(sp);
+        } else {
+          if (i > 0 && outputTokens[i - 1].type === 'chord') {
+            output.appendChild(document.createTextNode('-'));
+          }
+          const chip = document.createElement('span');
+          chip.className = 'chord-token';
+          chip.textContent = tok.value;
+          output.appendChild(chip);
+        }
+      }
+    }
+
+    btnClear.addEventListener('click', () => {
+      outputTokens = [];
+      heldKeys.clear();
+      chordKeys.clear();
+      chordPending = false;
+      renderOutput();
+      renderActiveKeys();
+      focusInput();
+    });
+  </script>
+</body>
+</html>
