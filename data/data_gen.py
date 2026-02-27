@@ -1,30 +1,5 @@
-"""
-Chord-to-Word Dataset Generator
-================================
-Generates a synthetic CSV dataset for training a chord-based word prediction model,
-inspired by stenography. Each row maps a chord sequence to a target word.
-
-Chord encoding:
-  - Split word into syllables
-  - For each syllable: remove duplicate letters, sort alphabetically
-  - Join chords with '-'
-
-Usage:
-  pip install nltk pyphen
-  python generate_chord_dataset.py
-
-Output:
-  chord_dataset.csv  — columns: chords, target_word
-"""
-
 import csv
 import random
-import re
-import string
-from collections import defaultdict
-from itertools import combinations
-
-import nltk
 import pyphen
 
 # ---------------------------------------------------------------------------

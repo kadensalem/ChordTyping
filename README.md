@@ -63,6 +63,9 @@ With probability `EXTRA_LETTER_PROB` (default: 8%) per chord, one letter is dupl
 ### Syllable Boundary Shift (as noise)
 In addition to using boundary shifts as clean variants, the shift operation can also act as noise — modeling the case where a user intends one split but executes another. This is already embedded in the variant generation: noisy draws are taken from all clean variants, including shifted ones.
 
+### Note on Small Words
+Small words (1-2 letters) are not considered for noise injection to help strengthen their signal in training.
+
 ---
 
 ## Dataset Composition
