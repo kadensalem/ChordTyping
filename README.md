@@ -18,7 +18,7 @@ This encoding is intentionally lossy — `at` and `ta` produce the same chord `a
 
 ## Vocabulary Source
 
-The script uses [`wordfreq`](https://github.com/rspeer/wordfreq) to load the most common English words ranked by real-world usage frequency. This is intentional: frequency-ranked vocabulary means the model trains on words it will encounter most in practice, rather than a flat dictionary dump that includes many obscure or archaic words. The vocabulary is filtered to alphabetic ASCII words between 3 and 20 characters, then truncated to the top `TARGET_VOCAB_SIZE` entries (default: 5,000).
+The script uses [`wordfreq`](https://github.com/rspeer/wordfreq) to load the most common English words ranked by real-world usage frequency. This is intentional: frequency-ranked vocabulary means the model trains on words it will encounter most in practice, rather than a flat dictionary dump that includes many obscure or archaic words. The vocabulary is filtered to alphabetic ASCII words between 1 and 20 characters, then truncated to the top `TARGET_VOCAB_SIZE` entries (default: 5,000).
 
 ---
 
