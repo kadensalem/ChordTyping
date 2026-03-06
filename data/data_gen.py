@@ -6,12 +6,13 @@ import pyphen
 # Config
 # ---------------------------------------------------------------------------
 
-NOISE_RATE = 0.40           # fraction of examples that are noisy
-KEY_SUB_PROB = 0.12         # per-chord probability of a key substitution
-MISSING_LETTER_PROB = 0.10  # per-chord probability of dropping a letter
-EXTRA_LETTER_PROB = 0.08    # per-chord probability of doubling a letter
-BOUNDARY_SHIFT_PROB = 0.25  # per-word probability of shifting a syllable boundary
-CLEAN_VARIANTS_PER_WORD = 3 # how many clean syllabification variants to keep
+NOISE_RATE = 0.50              # fraction of examples that are noisy
+KEY_SUB_PROB = 0.10            # per-chord probability of a key substitution
+MISSING_LETTER_PROB = 0.20     # per-chord probability of dropping a letter
+EXTRA_LETTER_PROB = 0.10       # per-chord probability of doubling a letter
+CLEAN_VARIANTS_PER_WORD = 5    # how many clean syllabification variants to keep
+NOISY_DRAWS_PER_VARIANT = 40.  # how many noisy versions to draw per clean variant
+SYLLABLE_SPLIT_PROB = .25      # per-variant probability of randomly oversplitting a syllable (pre-noise)
 OUTPUT_FILE = "data/chord_dataset.csv"
 MIN_WORD_LENGTH = 1
 MAX_WORD_LENGTH = 20
@@ -33,12 +34,10 @@ KEYBOARD_ADJACENCY = {
 
 dic = pyphen.Pyphen(lang='en_US')
 
-
 def syllabify(word: str) -> list[str]:
     """Return the pyphen canonical syllabification of a word."""
     hyphenated = dic.inserted(word.lower())
     return hyphenated.split('-') if '-' in hyphenated else [word.lower()]
-
 
 def boundary_shift_variants(syllables: list[str]) -> list[list[str]]:
     """
@@ -58,6 +57,15 @@ def boundary_shift_variants(syllables: list[str]) -> list[list[str]]:
             variants.append(new)
     return variants
 
+def random_oversplit(syllables: list[str]) -> list[str]:
+    """Randomly split one syllable into two at a random interior position."""
+    splittable = [i for i, s in enumerate(syllables) if len(s) >= 3]
+    if not splittable:
+        return syllables
+    idx = random.choice(splittable)
+    s = syllables[idx]
+    split_at = random.randint(1, len(s) - 1)
+    return syllables[:idx] + [s[:split_at], s[split_at:]] + syllables[idx+1:]
 
 def all_syllabification_variants(word: str) -> list[list[str]]:
     """Return canonical + boundary-shifted syllabifications."""
@@ -68,11 +76,9 @@ def all_syllabification_variants(word: str) -> list[list[str]]:
             variants.append(shifted)
     return variants
 
-
 def letter_by_letter(word: str) -> list[str]:
     """Return each character as its own 'syllable'."""
     return list(word.lower())
-
 
 # ---------------------------------------------------------------------------
 # Chord encoding
@@ -82,11 +88,9 @@ def syllable_to_chord(syllable: str) -> str:
     """Remove duplicate letters and sort alphabetically."""
     return ''.join(sorted(set(syllable.lower())))
 
-
 def syllables_to_chords(syllables: list[str]) -> str:
     """Convert a syllable list to a dash-joined chord string."""
     return '-'.join(syllable_to_chord(s) for s in syllables)
-
 
 # ---------------------------------------------------------------------------
 # Noise functions (applied BEFORE chord encoding)
@@ -99,7 +103,6 @@ def apply_key_substitution(syllable: str) -> str:
             chars[i] = random.choice(KEYBOARD_ADJACENCY[ch])
     return ''.join(chars)
 
-
 def apply_missing_letter(syllable: str) -> str:
     if len(syllable) <= 1:
         return syllable
@@ -108,16 +111,18 @@ def apply_missing_letter(syllable: str) -> str:
         return syllable[:idx] + syllable[idx+1:]
     return syllable
 
-
 def apply_extra_letter(syllable: str) -> str:
     if random.random() < EXTRA_LETTER_PROB:
         idx = random.randrange(len(syllable))
         return syllable[:idx] + syllable[idx] + syllable[idx:]
     return syllable
 
-
 def apply_noise_to_syllables(syllables: list[str]) -> list[str]:
     """Apply all noise types to a syllable list (pre-encoding)."""
+    # Randomly oversplit a syllable
+    if random.random() < SYLLABLE_SPLIT_PROB:
+        syllables = random_oversplit(syllables)
+    
     noisy = []
     for s in syllables:
         s = apply_key_substitution(s)
@@ -125,7 +130,6 @@ def apply_noise_to_syllables(syllables: list[str]) -> list[str]:
         s = apply_extra_letter(s)
         noisy.append(s)
     return noisy
-
 
 # ---------------------------------------------------------------------------
 # Variant generation per word
@@ -156,13 +160,12 @@ def generate_variants(word: str) -> list[tuple[str, str]]:
     if(len(word) < 3):
         return examples  # skip noise for very short words
     for sylls in syl_variants[:CLEAN_VARIANTS_PER_WORD]:
-        for _ in range(2):  # 2 noisy draws per variant
+        for _ in range(NOISY_DRAWS_PER_VARIANT):
             if random.random() < NOISE_RATE:
                 noisy_sylls = apply_noise_to_syllables(sylls)
                 add(syllables_to_chords(noisy_sylls), word)
 
     return examples
-
 
 # ---------------------------------------------------------------------------
 # Vocabulary loading
@@ -181,7 +184,6 @@ def load_vocabulary() -> list[str]:
     result = filtered[:TARGET_VOCAB_SIZE]
     print(f"Loaded {len(result)} vocabulary words.")
     return result
-
 
 # ---------------------------------------------------------------------------
 # Main
@@ -224,7 +226,6 @@ def main():
     print("\nSample rows:")
     for chords, word in random.sample(rows, min(10, len(rows))):
         print(f"  {chords:<40} -> {word}")
-
 
 if __name__ == '__main__':
     main()

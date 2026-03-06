@@ -54,10 +54,24 @@
       animation: blink 1s step-end infinite;
     }
 
-    @keyframes blink {
-      50% { opacity: 0; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* Word tokens in output */
+    .word-token {
+      display: inline-block;
+      position: relative;
     }
 
+    .word-text {
+      color: #c9d1d9;
+    }
+
+    .word-text.pending {
+      color: #a78bfa;
+      border-bottom: 1px dashed #7c6af7;
+    }
+
+    /* Chord chips */
     .chord-token {
       display: inline-block;
       background: #1e1e2e;
@@ -74,6 +88,74 @@
       width: 0.6em;
     }
 
+    /* Dropdown */
+    .dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      background: #1a1a2e;
+      border: 1px solid #3a3a5a;
+      border-radius: 8px;
+      min-width: 220px;
+      z-index: 100;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      gap: 12px;
+      transition: background 0.1s;
+    }
+
+    .dropdown-item:hover {
+      background: #2a2a4a;
+    }
+
+    .dropdown-item.active {
+      background: #7c6af7;
+      color: white;
+    }
+
+    .dropdown-item .prob {
+      font-size: 0.75rem;
+      opacity: 0.6;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .dropdown-item.active .prob {
+      opacity: 0.85;
+    }
+
+    .chords-area {
+    background: #16161e;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    min-height: 48px;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    color: #444;
+    word-break: break-all;
+    line-height: 1.8;
+    margin-bottom: 1.5rem;
+    }
+
+    .chords-area .chord-raw {
+    color: #4a4a6a;
+    margin-right: 4px;
+    }
+
+    .chords-area .chord-raw.active {
+    color: #7c6af7;
+    }
+
+    /* Capture box */
     .capture-box {
       background: #16161e;
       border: 2px solid #7c6af7;
@@ -154,22 +236,46 @@
       transition: border-color 0.2s, color 0.2s;
     }
 
-    .btn-clear:hover {
-      border-color: #7c6af7;
-      color: #a78bfa;
+    .btn-clear:hover { border-color: #7c6af7; color: #a78bfa; }
+
+    .stats {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.8rem;
+        }
+
+        .wpm {
+        font-size: 0.85rem;
+        color: #555;
+        letter-spacing: 0.08em;
+        }
+
+        .wpm span {
+        color: #7c6af7;
+        font-size: 1.1rem;
+        font-weight: bold;
+        }
+
+    .status {
+      font-size: 0.72rem;
+      color: #444;
+      text-align: right;
+      margin-top: 0.5rem;
+      min-height: 1rem;
     }
+
+    .status.error { color: #f87171; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>⌨ Chord Input</h1>
-    <p>Prompt: Discipline is often mistaken for rigidity, but in truth it is a form of freedom. The undisciplined mind drifts toward distraction, seduced by novelty and noise, while the disciplined mind chooses its direction with deliberation. To cultivate discipline is not to suppress desire, but to subordinate impulse to intention. It is the quiet architecture beneath achievement, the invisible scaffolding that supports mastery.
-
-In an era intoxicated by immediacy, patience has become a competitive advantage. The individual who can endure boredom, sustain focus, and tolerate incremental progress will outpace the one who seeks constant stimulation. Excellence, after all, is rarely explosive; it is cumulative. It accrues through small, repeated acts performed with consistency and care.
-
-The question, then, is not whether one is capable of greatness, but whether one is willing to engage in the quotidian rituals that make greatness possible. </p>
+    <p style="color:#555; font-size:0.82rem; margin-bottom:1rem; line-height:1.6">
+The personable instructor maintained strict discipline during the lecture, though he good naturedly joked that surviving the seminar deserved both a piece of candy and, for reasons no one fully understood, a celebratory pickle.    </p>
 
     <div class="output-area" id="output"></div>
+    <div class="chords-area" id="chords-display"></div>
 
     <div class="capture-box" id="capture-box" tabindex="0">
       <span class="capture-label">Keys held</span>
@@ -180,45 +286,83 @@ The question, then, is not whether one is capable of greatness, but whether one 
 
     <input id="hidden-input" type="text" autocomplete="off" spellcheck="false">
 
+    <div class="stats">
+    <div class="wpm">WPM: <span id="wpm-display">0</span></div>
     <button class="btn-clear" id="btn-clear">CLEAR</button>
+    </div>
+    <div class="status" id="status"></div>
 
-    <p class="hint">Press multiple keys simultaneously → release → chord appears &nbsp;|&nbsp; Space inserts a space &nbsp;|&nbsp; Backspace deletes previous word</p>
+    <p class="hint">
+      Space → submit chord word &nbsp;|&nbsp;
+      Tab → cycle suggestions &nbsp;|&nbsp;
+      Backspace → delete word &nbsp;|&nbsp;
+      Any key → accept &amp; continue
+    </p>
   </div>
 
   <script>
-    const output = document.getElementById('output');
-    const activeKeysEl = document.getElementById('active-keys');
-    const captureBox = document.getElementById('capture-box');
-    const hiddenInput = document.getElementById('hidden-input');
-    const btnClear = document.getElementById('btn-clear');
+    const API = 'http://localhost:8000';
 
-    let heldKeys = new Set();
-    let chordKeys = new Set(); // accumulates all keys pressed in this chord
-    let outputTokens = []; // array of {type:'chord'|'space', value?}
+    const outputEl    = document.getElementById('output');
+    const activeKeysEl = document.getElementById('active-keys');
+    const captureBox  = document.getElementById('capture-box');
+    const hiddenInput = document.getElementById('hidden-input');
+    const btnClear    = document.getElementById('btn-clear');
+    const statusEl    = document.getElementById('status');
+
+    // -----------------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------------
+
+    let heldKeys    = new Set();
+    let chordKeys   = new Set();
     let chordPending = false;
 
-    function focusInput() {
-      hiddenInput.focus();
-    }
+    // Each committed token: { type: 'word', chords: [...], resolved: 'str' }
+    //                     | { type: 'space' }
+    let outputTokens = [];
 
+    // Pending word being built (chords not yet submitted)
+    let pendingChords = []; // array of chord strings
+
+    // Dropdown state
+    let dropdownPredictions = []; // [{word, probability}]
+    let dropdownIndex = 0;        // currently highlighted index
+    let dropdownWordIdx = null;   // index in outputTokens of the word the dropdown is for
+
+    let startTime = null;
+    let acceptedWordCount = 0;
+
+    // -----------------------------------------------------------------------
+    // Focus
+    // -----------------------------------------------------------------------
+
+    function focusInput() { hiddenInput.focus(); }
     captureBox.addEventListener('click', focusInput);
     captureBox.addEventListener('focus', focusInput);
-    document.addEventListener('click', e => {
-      if (captureBox.contains(e.target) || e.target === captureBox) focusInput();
-    });
-
     window.addEventListener('load', focusInput);
+
+    // -----------------------------------------------------------------------
+    // Key handling
+    // -----------------------------------------------------------------------
 
     hiddenInput.addEventListener('keydown', e => {
       e.preventDefault();
-
       const key = e.key.toLowerCase();
 
-      if (['control','shift','alt','meta','capslock','tab','escape'].includes(key)) return;
+      if (['control','shift','alt','meta','capslock','escape'].includes(key)) return;
 
-      // Backspace: delete all chords belonging to the previous word
+      // Tab: cycle dropdown
+      if (key === 'tab') {
+        if (dropdownPredictions.length > 0) {
+          dropdownIndex = (dropdownIndex + 1) % dropdownPredictions.length;
+          updateDropdownHighlight();
+        }
+        return;
+      }
+
+      // Backspace
       if (key === 'backspace') {
-        // If a chord is mid-flight, cancel it first
         if (chordPending) {
           chordKeys.clear();
           chordPending = false;
@@ -226,25 +370,56 @@ The question, then, is not whether one is capable of greatness, but whether one 
           renderActiveKeys();
           return;
         }
+        // If dropdown open, close it and remove the pending word
+        if (dropdownPredictions.length > 0) {
+          closeDropdown();
+          // Remove the word token that triggered the dropdown
+          if (dropdownWordIdx !== null) {
+            outputTokens.splice(dropdownWordIdx, 1);
+            dropdownWordIdx = null;
+          }
+          renderOutput();
+renderChordsDisplay();
+          return;
+        }
         deleteLastWord();
         return;
       }
 
-      if (key === ' ') {
-        if (heldKeys.size > 0) {
-          commitChord();
+      // Space: submit current pending chords to model
+        if (key === ' ') {
+        if (chordPending) commitChord();
+
+        if (dropdownPredictions.length > 0) {
+            acceptDropdown();
+            outputTokens.push({ type: 'space' });
+            renderOutput();
+renderChordsDisplay();
+            return;
         }
-        outputTokens.push({ type: 'space' });
-        renderOutput();
+
+        if (pendingChords.length > 0) {
+            submitToModel();  // submitToModel now also pushes a space after resolving
+        } else {
+            outputTokens.push({ type: 'space' });
+            renderOutput();
+renderChordsDisplay();
+        }
         return;
+        }
+
+      // Any other key while dropdown is open → accept selection and continue
+      if (dropdownPredictions.length > 0) {
+        acceptDropdown();
+        // Fall through to process the key as a new chord start
       }
 
+      // Regular chord key
       if (!heldKeys.has(key)) {
         heldKeys.add(key);
         chordKeys.add(key);
         chordPending = true;
       }
-
       renderActiveKeys();
     });
 
@@ -252,7 +427,6 @@ The question, then, is not whether one is capable of greatness, but whether one 
       const key = e.key.toLowerCase();
       heldKeys.delete(key);
       renderActiveKeys();
-
       if (heldKeys.size === 0 && chordPending) {
         commitChord();
       }
@@ -266,35 +440,242 @@ The question, then, is not whether one is capable of greatness, but whether one 
       renderActiveKeys();
     });
 
+    // -----------------------------------------------------------------------
+    // Chord commit
+    // -----------------------------------------------------------------------
+
     function commitChord() {
       if (chordKeys.size === 0) return;
       const sorted = Array.from(chordKeys).sort().join('');
-      outputTokens.push({ type: 'chord', value: sorted });
+      pendingChords.push(sorted);
       chordKeys.clear();
       chordPending = false;
       renderOutput();
+renderChordsDisplay();
       renderActiveKeys();
     }
 
-    // Delete all chords back to (and including) the last space token.
-    // If there's no space, deletes everything.
-    function deleteLastWord() {
-      if (outputTokens.length === 0) return;
+    // -----------------------------------------------------------------------
+    // Model submission
+    // -----------------------------------------------------------------------
 
-      // If the last token is a space, remove just that space
-      if (outputTokens[outputTokens.length - 1].type === 'space') {
-        outputTokens.pop();
+    let lastAcceptedWord = null;  // add this near the top with your other state variables
+
+    async function submitToModel() {
+    const chordsStr = pendingChords.join('-');
+    pendingChords = [];
+
+      // For 1-2 character inputs, skip the model and resolve directly
+    const totalChars = chordsStr.replace(/-/g, '').length;
+    if (totalChars <= 2) {
+        const wordToken = { type: 'word', chords: chordsStr.replace(/-/g, ''), resolved: chordsStr.replace(/-/g, '') };
+        outputTokens.push(wordToken);
+        outputTokens.push({ type: 'space' });
+        if (!startTime) startTime = Date.now();
+        acceptedWordCount++;
+        lastAcceptedWord = chordsStr;
+        updateWpm();
         renderOutput();
+renderChordsDisplay();
+        return;
+    }
+
+    const wordToken = { type: 'word', chords: chordsStr, resolved: null };
+    outputTokens.push(wordToken);
+    outputTokens.push({ type: 'space' });
+    dropdownWordIdx = outputTokens.length - 2;
+    renderOutput();
+renderChordsDisplay();
+
+    setStatus('predicting...');
+    try {
+        const res = await fetch(`${API}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chords: chordsStr,
+            previous_word: lastAcceptedWord,   // <-- new
+            topk: 5,
+        }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        dropdownPredictions = data.predictions;
+        dropdownIndex = 0;
+        outputTokens[dropdownWordIdx].resolved = dropdownPredictions[0]?.word || chordsStr;
+        setStatus('');
+        renderOutput();
+renderChordsDisplay();
+    } catch (err) {
+        setStatus(`Error: ${err.message}`, true);
+        outputTokens[dropdownWordIdx].resolved = chordsStr;
+        dropdownPredictions = [];
+        dropdownWordIdx = null;
+        renderOutput();
+renderChordsDisplay();
+    }
+    }
+
+    // -----------------------------------------------------------------------
+    // Dropdown
+    // -----------------------------------------------------------------------
+
+    function updateDropdownHighlight() {
+      // Update resolved word to match highlighted item
+      if (dropdownWordIdx !== null && dropdownPredictions[dropdownIndex]) {
+        outputTokens[dropdownWordIdx].resolved = dropdownPredictions[dropdownIndex].word;
+      }
+      renderOutput();
+renderChordsDisplay();
+    }
+
+    function acceptDropdown() {
+    if (dropdownWordIdx !== null && dropdownPredictions[dropdownIndex]) {
+        const accepted = dropdownPredictions[dropdownIndex].word;
+        outputTokens[dropdownWordIdx].resolved = accepted;
+        lastAcceptedWord = accepted;
+        // WPM tracking
+        if (!startTime) startTime = Date.now();
+        acceptedWordCount++;
+        updateWpm();
+    }
+    closeDropdown();
+    renderOutput();
+renderChordsDisplay();
+    }
+
+    function closeDropdown() {
+      dropdownPredictions = [];
+      dropdownIndex = 0;
+      dropdownWordIdx = null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Backspace / delete
+    // -----------------------------------------------------------------------
+
+    function deleteLastWord() {
+      if (outputTokens.length === 0 && pendingChords.length === 0) return;
+
+      // Clear pending chords first
+      if (pendingChords.length > 0) {
+        pendingChords = [];
+        renderOutput();
+renderChordsDisplay();
         return;
       }
 
-      // Walk backwards and remove all chords until we hit a space or the start
-      while (outputTokens.length > 0 && outputTokens[outputTokens.length - 1].type === 'chord') {
+      if (outputTokens[outputTokens.length - 1]?.type === 'space') {
         outputTokens.pop();
+        renderOutput();
+renderChordsDisplay();
+        return;
       }
 
+      while (outputTokens.length > 0 && outputTokens[outputTokens.length - 1].type === 'word') {
+        outputTokens.pop();
+      }
       renderOutput();
+renderChordsDisplay();
     }
+
+    // -----------------------------------------------------------------------
+    // Render
+    // -----------------------------------------------------------------------
+
+    function renderOutput() {
+      outputEl.innerHTML = '';
+
+      for (let i = 0; i < outputTokens.length; i++) {
+        const tok = outputTokens[i];
+
+        if (tok.type === 'space') {
+          const sp = document.createElement('span');
+          sp.className = 'space-token';
+          outputEl.appendChild(sp);
+          continue;
+        }
+
+        // Word token
+        const wrapper = document.createElement('span');
+        wrapper.className = 'word-token';
+
+        const wordSpan = document.createElement('span');
+        wordSpan.className = 'word-text';
+
+        if (tok.resolved) {
+          wordSpan.textContent = tok.resolved;
+          // Show dropdown if this is the active dropdown word
+          if (i === dropdownWordIdx && dropdownPredictions.length > 0) {
+            wordSpan.classList.add('pending');
+            wrapper.appendChild(wordSpan);
+            wrapper.appendChild(buildDropdown());
+          } else {
+            wrapper.appendChild(wordSpan);
+          }
+        } else {
+          // Still loading — show chord chips
+          const chordsArr = tok.chords.split('-');
+          chordsArr.forEach((c, ci) => {
+            if (ci > 0) wrapper.appendChild(document.createTextNode('-'));
+            const chip = document.createElement('span');
+            chip.className = 'chord-token';
+            chip.textContent = c;
+            wrapper.appendChild(chip);
+          });
+        }
+
+        outputEl.appendChild(wrapper);
+      }
+
+      // Pending chords (not yet submitted)
+      if (pendingChords.length > 0) {
+        pendingChords.forEach((c, ci) => {
+          if (ci > 0) outputEl.appendChild(document.createTextNode('-'));
+          const chip = document.createElement('span');
+          chip.className = 'chord-token';
+          chip.textContent = c;
+          outputEl.appendChild(chip);
+        });
+      }
+    }
+
+    function buildDropdown() {
+      const dd = document.createElement('div');
+      dd.className = 'dropdown';
+
+      dropdownPredictions.forEach((pred, idx) => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item' + (idx === dropdownIndex ? ' active' : '');
+
+        const wordSpan = document.createElement('span');
+        wordSpan.textContent = pred.word;
+
+        const probSpan = document.createElement('span');
+        probSpan.className = 'prob';
+        probSpan.textContent = (pred.probability * 100).toFixed(1) + '%';
+
+        item.appendChild(wordSpan);
+        item.appendChild(probSpan);
+
+        item.addEventListener('mousedown', e => {
+          e.preventDefault();
+          dropdownIndex = idx;
+          acceptDropdown();
+          focusInput();
+        });
+
+        dd.appendChild(item);
+      });
+
+      return dd;
+    }
+
+    // -----------------------------------------------------------------------
+    // Active keys display
+    // -----------------------------------------------------------------------
 
     function renderActiveKeys() {
       activeKeysEl.innerHTML = '';
@@ -311,35 +692,70 @@ The question, then, is not whether one is capable of greatness, but whether one 
       });
     }
 
-    function renderOutput() {
-      output.innerHTML = '';
-      for (let i = 0; i < outputTokens.length; i++) {
-        const tok = outputTokens[i];
-        if (tok.type === 'space') {
-          const sp = document.createElement('span');
-          sp.className = 'space-token';
-          output.appendChild(sp);
-        } else {
-          if (i > 0 && outputTokens[i - 1].type === 'chord') {
-            output.appendChild(document.createTextNode('-'));
-          }
-          const chip = document.createElement('span');
-          chip.className = 'chord-token';
-          chip.textContent = tok.value;
-          output.appendChild(chip);
-        }
-      }
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (isError ? ' error' : '');
     }
 
-    btnClear.addEventListener('click', () => {
-      outputTokens = [];
-      heldKeys.clear();
-      chordKeys.clear();
-      chordPending = false;
-      renderOutput();
-      renderActiveKeys();
-      focusInput();
-    });
+    const chordsDisplayEl = document.getElementById('chords-display');
+
+function renderChordsDisplay() {
+  chordsDisplayEl.innerHTML = '';
+
+  // Render committed tokens
+  for (const tok of outputTokens) {
+    if (tok.type === 'space') {
+      chordsDisplayEl.appendChild(document.createTextNode(' '));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'chord-raw';
+    span.textContent = tok.chords;
+    chordsDisplayEl.appendChild(span);
+  }
+
+  // Render currently pending chords (actively being typed)
+  if (pendingChords.length > 0) {
+    if (outputTokens.length > 0) chordsDisplayEl.appendChild(document.createTextNode(' '));
+    const span = document.createElement('span');
+    span.className = 'chord-raw active';
+    span.textContent = pendingChords.join('-');
+    chordsDisplayEl.appendChild(span);
+  }
+}
+
+    // -----------------------------------------------------------------------
+    // Clear
+    // -----------------------------------------------------------------------
+
+btnClear.addEventListener('click', () => {
+  outputTokens = [];
+  pendingChords = [];
+  heldKeys.clear();
+  chordKeys.clear();
+  chordPending = false;
+  closeDropdown();
+  startTime = null;
+  acceptedWordCount = 0;
+  updateWpm();
+  renderOutput();
+renderChordsDisplay();
+  renderActiveKeys();
+  setStatus('');
+  focusInput();
+  chordsDisplayEl.innerHTML = '';
+});
+
+    function updateWpm() {
+        if (!startTime || acceptedWordCount === 0) {
+            document.getElementById('wpm-display').textContent = '0';
+            return;
+        }
+        const elapsedMinutes = (Date.now() - startTime) / 60000;
+        const wpm = Math.round(acceptedWordCount / elapsedMinutes);
+        document.getElementById('wpm-display').textContent = wpm;
+    }
+
   </script>
 </body>
 </html>
